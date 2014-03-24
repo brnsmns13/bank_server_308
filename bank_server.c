@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <pthread.h>
 
 #include "Bank.c"
@@ -7,7 +8,8 @@
 int main(int argc, char const *argv[])
 {
     int num_worker_threads, num_accounts;
-    char *output_file;
+    char *output_file_name;
+    FILE *output_file;
 
     // Check correct args
     if (argc != 4)
@@ -19,7 +21,8 @@ int main(int argc, char const *argv[])
     // Get args from command line
     num_worker_threads = atoi(argv[1]);
     num_accounts = atoi(argv[2]);
-    output_file = argv[3];
+    strcpy(output_file_name, argv[3]);
+    output_file = fopen(output_file_name, "w");
 
     // Init bank accounts
     if(!initialize_accounts(num_accounts))
