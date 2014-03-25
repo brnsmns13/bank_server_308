@@ -1,6 +1,9 @@
 void worker_routine();
 void process_request();
 char* get_user_command();
+void debug_print(char *str);
+void do_transaction(int request_id, int account_id, struct timeval start_time);
+void do_balance(int request_id, int account_id, struct timeval start_time);
 
 static int INPUT_LENGTH = 1024;
 

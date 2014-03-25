@@ -11,14 +11,14 @@ node *root;
 node *last;
 pthread_mutex_t list_mutex;
 int run = 1;
+FILE *output_file;
+account *accounts;
 
 int main(int argc, char const *argv[])
 {
     int num_worker_threads, num_accounts, request_number;
     char *output_file_name;
-    FILE *output_file;
     pthread_t threads[num_worker_threads];
-    account *accounts;
 
     // Check correct args
     if (argc != 4)
@@ -32,7 +32,12 @@ int main(int argc, char const *argv[])
     num_accounts = atoi(argv[2]);
     output_file_name = (char *) malloc(sizeof(char *) * 128);
     strcpy(output_file_name, argv[3]);
-    output_file = fopen(output_file_name, "w+");
+    output_file = fopen(output_file_name, "w");
+
+    if(output_file == NULL)
+    {
+        printf("- Error creating output file\n");
+    }
 
     // Init bank accounts
     if(!initialize_accounts(num_accounts))
@@ -83,16 +88,6 @@ int main(int argc, char const *argv[])
             break;
         }
 
-        if(!strcmp("REM", command))
-        {
-            if(root != NULL)
-            {
-                printf("* Removing root node: ID %d, Command, %s\n", root->req.request_id, root->req.command);
-                root = root->next_node;
-            }
-            continue;
-        }
-
         // Create a new request
         request req;
         gettimeofday(&req.time_start, NULL);
@@ -104,7 +99,7 @@ int main(int argc, char const *argv[])
 
         if(root == NULL)
         {
-            printf("* Creating new root\n");
+            //printf("* Creating new root\n");
             root = (node *) malloc(sizeof(node));
             root->next_node = NULL;
             root->req = req;
@@ -112,7 +107,7 @@ int main(int argc, char const *argv[])
         }
         else if(last->next_node == NULL)
         {
-            printf("* Adding node to end\n");
+            //printf("* Adding node to end\n");
             node *new_node;
             new_node = (node *) malloc(sizeof(node));
             new_node->req = req;
@@ -123,19 +118,19 @@ int main(int argc, char const *argv[])
         }
         pthread_mutex_unlock(&list_mutex);
 
-        node *iter;
-        iter = (node *) malloc(sizeof(node));
-        iter = root;
-        while(iter != NULL)
-        {
-            printf("ID: %d\tCommand: %s\n", iter->req.request_id, iter->req.command);
-            iter = iter->next_node;
-        }
+        // node *iter;
+        // iter = (node *) malloc(sizeof(node));
+        // iter = root;
+        // while(iter != NULL)
+        // {
+        //     printf("ID: %d\tCommand: %s\n", iter->req.request_id, iter->req.command);
+        //     iter = iter->next_node;
+        // }
     }
 
     // Do cleanup
 
-
+    fclose(output_file);
     return 0;
 }
 
@@ -143,15 +138,73 @@ int main(int argc, char const *argv[])
 void worker_routine()
 {
     // Wait for tasks to be pushed to queue
-
-    // Pick up task
-
+    while(run || root != NULL)
+    {
+        pthread_mutex_lock(&list_mutex);
+        request req;
+        if(root != NULL)
+        {
+            struct node* temp;
+            temp = root;
+            req = root->req;
+            root = root->next_node;
+            free(temp);
+            pthread_mutex_unlock(&list_mutex);
+            //printf("THREAD - ID: %d\tCommand: %s\n", req.request_id, req.command);
+            process_request(req);
+        }
+        else
+        {
+            pthread_mutex_unlock(&list_mutex);
+        }
+    }
 }
 
-// Take a single request
+// Process a request in the worker thread
 void process_request(request req)
 {
+    fprintf(output_file, "ID: %d\tCOMMAND: %s\n", req.request_id, req.command);
+    printf("ID %d\n", req.request_id);
+    char *cmd;
+    char *tok;
+    cmd = malloc(sizeof(char) * INPUT_LENGTH);
+    strcpy(cmd, req.command);
+    tok = strsep(&cmd, " ");
+    //printf("CMD: %s\tARGS: %s\n", tok, cmd);
 
+    // Run associated function
+    if(!strcmp("TRANS", tok))
+    {
+        do_transaction(req.request_id, atoi(cmd), req.time_start);
+    }
+    else if(!strcmp("CHECK", tok))
+    {
+        do_balance(req.request_id, atoi(cmd), req.time_start);
+    }
+}
+
+// Handle transaction requests
+void do_transaction(int request_id, int account_id, struct timeval time_start)
+{
+    int x;
+}
+
+// Handle balance requests
+void do_balance(int request_id, int account_id, struct timeval time_start)
+{
+    int balance;
+    account acct;
+
+    acct = accounts[account_id-1];
+    pthread_mutex_lock(&acct.lock);
+    balance = read_account(acct.account_id);
+    pthread_mutex_unlock(&acct.lock);
+    struct timeval time_end;
+    gettimeofday(&time_end, NULL);
+
+    // Write status to file
+    fprintf(output_file, "%d BAL %d TIME %d.%06d %d.%06d\n", request_id, balance, time_start.tv_sec, time_start.tv_usec, time_end.tv_sec, time_end.tv_usec);
+    printf("%d BAL %d TIME %d.%06d %d.%06d\n", request_id, balance, time_start.tv_sec, time_start.tv_usec, time_end.tv_sec, time_end.tv_usec);
 }
 
 // Read line from STDIN and return
@@ -161,5 +214,4 @@ char* get_user_command()
     fgets(user_in, INPUT_LENGTH, stdin);
     user_in[strlen(user_in)-1] = 0;
     return user_in;
-
 }
