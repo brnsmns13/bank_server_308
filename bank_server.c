@@ -64,8 +64,11 @@ int main(int argc, char const *argv[])
 
     // Enter main thread loop
     request_number = 1;
-    root = (node *) malloc(sizeof(node));
-    last = (node *) malloc(sizeof(node));
+    // root = (node *) malloc(sizeof(node));
+    // last = (node *) malloc(sizeof(node));
+    root = NULL;
+    last = NULL;
+    root = last;
     pthread_mutex_init(&list_mutex, NULL);
     while(run)
     {
@@ -80,6 +83,16 @@ int main(int argc, char const *argv[])
             break;
         }
 
+        if(!strcmp("REM", command))
+        {
+            if(root != NULL)
+            {
+                printf("* Removing root node: ID %d, Command, %s\n", root->req.request_id, root->req.command);
+                root = root->next_node;
+            }
+            continue;
+        }
+
         // Create a new request
         request req;
         gettimeofday(&req.time_start, NULL);
@@ -88,11 +101,36 @@ int main(int argc, char const *argv[])
 
         // Push request to queue
         pthread_mutex_lock(&list_mutex);
-        root->next_node = NULL;
-        root->req = req;
+
+        if(root == NULL)
+        {
+            printf("* Creating new root\n");
+            root = (node *) malloc(sizeof(node));
+            root->next_node = NULL;
+            root->req = req;
+            last = root;
+        }
+        else if(last->next_node == NULL)
+        {
+            printf("* Adding node to end\n");
+            node *new_node;
+            new_node = (node *) malloc(sizeof(node));
+            new_node->req = req;
+            new_node->next_node = NULL;
+            last->next_node = new_node;
+            last = new_node;
+
+        }
         pthread_mutex_unlock(&list_mutex);
 
-        printf("Command: %s\n", root->req.command);
+        node *iter;
+        iter = (node *) malloc(sizeof(node));
+        iter = root;
+        while(iter != NULL)
+        {
+            printf("ID: %d\tCommand: %s\n", iter->req.request_id, iter->req.command);
+            iter = iter->next_node;
+        }
     }
 
     // Do cleanup
