@@ -47,7 +47,7 @@ int main(int argc, char const *argv[])
     }
     else 
     {
-        printf("* Created %d accounts\n", num_accounts);
+        //printf("* Created %d accounts\n", num_accounts);
     }
 
     // Create mutex for each account
@@ -82,8 +82,9 @@ int main(int argc, char const *argv[])
         command = get_user_command();
 
         // Check for exit
-        if(!strcmp("EXIT", command))
+        if(!strcmp("END", command))
         {
+            printf("END %d\n", request_number);
             run = 0;
             break;
         }
@@ -144,11 +145,13 @@ void worker_routine()
         request req;
         if(root != NULL)
         {
-            struct node* temp;
-            temp = root;
             req = root->req;
             root = root->next_node;
-            free(temp);
+            // struct node* temp;
+            // temp = root;
+            // req = root->req;
+            // root = root->next_node;
+            // free(temp);
             pthread_mutex_unlock(&list_mutex);
             //printf("THREAD - ID: %d\tCommand: %s\n", req.request_id, req.command);
             process_request(req);
@@ -163,7 +166,7 @@ void worker_routine()
 // Process a request in the worker thread
 void process_request(request req)
 {
-    fprintf(output_file, "ID: %d\tCOMMAND: %s\n", req.request_id, req.command);
+    //fprintf(output_file, "ID: %d\tCOMMAND: %s\n", req.request_id, req.command);
     printf("ID %d\n", req.request_id);
     char *cmd;
     char *tok;
@@ -175,7 +178,7 @@ void process_request(request req)
     // Run associated function
     if(!strcmp("TRANS", tok))
     {
-        do_transaction(req.request_id, atoi(cmd), req.time_start);
+        do_transaction(req.request_id, cmd, req.time_start);
     }
     else if(!strcmp("CHECK", tok))
     {
@@ -184,9 +187,73 @@ void process_request(request req)
 }
 
 // Handle transaction requests
-void do_transaction(int request_id, int account_id, struct timeval time_start)
+void do_transaction(int request_id, char *transaction_str, struct timeval time_start)
 {
-    int x;
+    char *temp;
+    int trans_accounts[10] = {0};
+    int trans_amounts[10] = {0};
+    int ISF = 0;
+
+    // Process transaction command string
+    int trans_count = 0;
+    while((temp = strsep(&transaction_str, " ")) != NULL)
+    {
+        trans_accounts[trans_count] = atoi(temp);
+        temp = strsep(&transaction_str, " ");
+        if(temp == NULL)
+            break;
+        trans_amounts[trans_count++] = atoi(temp);
+    }
+
+    // Lock each account mutex
+    int i;
+    for (i = 0; i < trans_count; i++)
+    {
+        account acct = accounts[trans_accounts[i]-1];
+        pthread_mutex_lock(&acct.lock);
+    }
+
+    // Check sufficient funds for each account
+    for (i = 0; i < trans_count; i++)
+    {
+        account acct = accounts[trans_accounts[i]-1];
+        int balance = read_account(acct.account_id);
+        if(balance + trans_amounts[i] < 0)
+        {
+            ISF = 1;
+            break;
+        }
+    }
+    if(ISF)
+    {
+        // write status to file
+        struct timeval time_end;
+        gettimeofday(&time_end, NULL);
+        fprintf(output_file, "%d ISF %d TIME %d.%06d %d.%06d\n", request_id, trans_accounts[i], time_start.tv_sec, time_start.tv_usec, time_end.tv_sec, time_end.tv_usec);
+    }
+
+    // Do the actual transactions
+    else {
+        for (i = 0; i < trans_count; i++)
+        {
+            account acct = accounts[trans_accounts[i]-1];
+            int balance = read_account(acct.account_id);
+            write_account(acct.account_id, balance + trans_amounts[i]);
+        }
+
+        // write status to file
+        struct timeval time_end;
+        gettimeofday(&time_end, NULL);
+        fprintf(output_file, "%d OK TIME %d.%06d %d.%06d\n", request_id, time_start.tv_sec, time_start.tv_usec, time_end.tv_sec, time_end.tv_usec);
+    }
+
+    // unlock accounts
+    for (i = 0; i < trans_count; i++)
+    {
+        account acct = accounts[trans_accounts[i]-1];
+        pthread_mutex_unlock(&acct.lock);
+    }
+
 }
 
 // Handle balance requests
@@ -204,7 +271,7 @@ void do_balance(int request_id, int account_id, struct timeval time_start)
 
     // Write status to file
     fprintf(output_file, "%d BAL %d TIME %d.%06d %d.%06d\n", request_id, balance, time_start.tv_sec, time_start.tv_usec, time_end.tv_sec, time_end.tv_usec);
-    printf("%d BAL %d TIME %d.%06d %d.%06d\n", request_id, balance, time_start.tv_sec, time_start.tv_usec, time_end.tv_sec, time_end.tv_usec);
+    //printf("%d BAL %d TIME %d.%06d %d.%06d\n", request_id, balance, time_start.tv_sec, time_start.tv_usec, time_end.tv_sec, time_end.tv_usec);
 }
 
 // Read line from STDIN and return

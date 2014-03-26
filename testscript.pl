@@ -122,6 +122,8 @@ for my $id (1..$accts) { # Submit checks for each account
 
 print "\e[33mEND\e[m\n";
 print $c_in "END\n";
+print "\e[33mEND\e[m\n";
+print $c_in "END\n";
 print "\e[35mWaiting for program to exit...\e[m\n";
 wait;
 
